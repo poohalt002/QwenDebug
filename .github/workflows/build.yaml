@@ -28,7 +28,6 @@ jobs:
                   view.backgroundColor = UIColor.white
                   sb = false
                   
-                  // Add native navigation bar with Inspect button
                   let nav = UINavigationController(rootViewController: self)
                   nav.isNavigationBarHidden = false
                   nav.navigationBar.barTintColor = UIColor.red
@@ -40,7 +39,6 @@ jobs:
                   inspectBtn.tintColor = UIColor.white
                   self.navigationItem.rightBarButtonItem = inspectBtn
                   
-                  // Replace root with nav controller
                   if let window = UIApplication.shared.windows.first {
                       window.rootViewController = nav
                       window.makeKeyAndVisible()
@@ -153,30 +151,23 @@ jobs:
                       if let json = result as? String,
                          let data = json.data(using: .utf8),
                          let arr = try? JSONSerialization.jsonObject(with: data) as? [[String:String]] {
-                          self.showElementPicker(elements: arr)
+                          self.showInspectorTable(elements: arr)
                       } else {
                           self.showAlert(title: "No Elements", message: "No elements found.")
                       }
                   }
               }
 
-              func showElementPicker(elements: [[String:String]]) {
-                  let alert = UIAlertController(title: "Tap to Copy Selector", message: nil, preferredStyle: .actionSheet)
-                  for el in elements {
-                      let tag = el["tag"] ?? "?"
-                      let id = el["id"] ?? ""
-                      let cls = el["class"] ?? ""
-                      let text = el["text"] ?? ""
-                      let sel = el["selector"] ?? ""
-                      let title = "[\(tag)] \(sel) - \(text)"
-                      let action = UIAlertAction(title: title, style: .default) { _ in
-                          UIPasteboard.general.string = sel
-                          self.showAlert(title: "Copied!", message: "Selector:\n\(sel)")
-                      }
-                      alert.addAction(action)
+              func showInspectorTable(elements: [[String:String]]) {
+                  let tableVC = InspectorTableViewController()
+                  tableVC.elements = elements
+                  tableVC.onSelect = { [weak self] sel in
+                      UIPasteboard.general.string = sel
+                      self?.showAlert(title: "Copied!", message: "Selector:\n\(sel)")
                   }
-                  alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-                  self.present(alert, animated: true)
+                  let nav = UINavigationController(rootViewController: tableVC)
+                  nav.modalPresentationStyle = .formSheet
+                  self.present(nav, animated: true)
               }
 
               func showAlert(title: String, message: String) {
@@ -214,6 +205,46 @@ jobs:
                           }
                       }
                   }
+              }
+          }
+
+          class InspectorTableViewController: UITableViewController {
+              var elements: [[String:String]] = []
+              var onSelect: ((String) -> Void)?
+              
+              override func viewDidLoad() {
+                  super.viewDidLoad()
+                  title = "Tap Element to Copy"
+                  navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(doneTapped))
+                  tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
+              }
+              
+              @objc func doneTapped() {
+                  dismiss(animated: true)
+              }
+              
+              override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+                  return elements.count
+              }
+              
+              override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+                  let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+                  let el = elements[indexPath.row]
+                  let tag = el["tag"] ?? "?"
+                  let sel = el["selector"] ?? ""
+                  let text = el["text"] ?? ""
+                  cell.textLabel?.text = "[\(tag)] \(sel)"
+                  cell.detailTextLabel?.text = text
+                  cell.detailTextLabel?.numberOfLines = 2
+                  cell.textLabel?.font = UIFont.systemFont(ofSize: 13)
+                  return cell
+              }
+              
+              override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+                  tableView.deselectRow(at: indexPath, animated: true)
+                  let sel = elements[indexPath.row]["selector"] ?? ""
+                  onSelect?(sel)
+                  dismiss(animated: true)
               }
           }
 
