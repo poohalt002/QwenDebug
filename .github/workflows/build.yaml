@@ -30,7 +30,6 @@ jobs:
                   
                   let c = WKWebViewConfiguration()
                   c.userContentController.add(self, name: "themeHandler")
-                  c.userContentController.add(self, name: "inspector")
                   
                   let themeJS = """
                   (function(){
@@ -90,44 +89,7 @@ jobs:
                   })()
                   """
                   
-                  let inspectJS = """
-                  (function(){
-                    function getSelector(el){
-                      if(el.id) return '#'+el.id;
-                      var path=[];
-                      while(el && el.nodeType===1 && el!==document.body && el!==document.documentElement){
-                        var tag=el.tagName.toLowerCase();
-                        if(el.className){
-                          var cls=el.className.toString().split(/\\s+/).filter(function(c){return c.length>0;}).join('.');
-                          if(cls) tag+='.'+cls;
-                        }
-                        path.unshift(tag);
-                        el=el.parentElement;
-                      }
-                      return path.join(' > ');
-                    }
-                    document.addEventListener('contextmenu',function(e){
-                      e.preventDefault();
-                      var el=e.target;
-                      var info={
-                        tag: el.tagName,
-                        id: el.id || '(none)',
-                        class: el.className || '(none)',
-                        text: (el.textContent || '').substring(0,80),
-                        selector: getSelector(el)
-                      };
-                      if(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.inspector){
-                        window.webkit.messageHandlers.inspector.postMessage(JSON.stringify(info));
-                      }
-                    });
-                    var style=document.createElement('style');
-                    style.textContent='*{touch-action:manipulation;-webkit-touch-callout:none;}';
-                    document.head.appendChild(style);
-                  })()
-                  """
-                  
                   c.userContentController.addUserScript(WKUserScript(source: themeJS, injectionTime: .atDocumentStart, forMainFrameOnly: false))
-                  c.userContentController.addUserScript(WKUserScript(source: inspectJS, injectionTime: .atDocumentEnd, forMainFrameOnly: false))
                   
                   wv = WKWebView(frame: .zero, configuration: c)
                   wv.translatesAutoresizingMaskIntoConstraints = false
@@ -140,6 +102,86 @@ jobs:
                       wv.bottomAnchor.constraint(equalTo: view.bottomAnchor)
                   ])
                   wv.load(URLRequest(url: URL(string: "https://chat.qwen.ai/")!))
+                  
+                  // Floating Inspect Button
+                  let btn = UIButton(type: .system)
+                  btn.setTitle("🔍 Inspect", for: .normal)
+                  btn.backgroundColor = UIColor(red: 0, green: 0.5, blue: 1, alpha: 0.85)
+                  btn.setTitleColor(.white, for: .normal)
+                  btn.titleLabel?.font = UIFont.boldSystemFont(ofSize: 14)
+                  btn.layer.cornerRadius = 18
+                  btn.translatesAutoresizingMaskIntoConstraints = false
+                  btn.addTarget(self, action: #selector(inspectTapped), for: .touchUpInside)
+                  view.addSubview(btn)
+                  NSLayoutConstraint.activate([
+                      btn.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+                      btn.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
+                      btn.widthAnchor.constraint(equalToConstant: 90),
+                      btn.heightAnchor.constraint(equalToConstant: 36)
+                  ])
+              }
+
+              @objc func inspectTapped() {
+                  let js = """
+                  (function(){
+                    var results=[];
+                    var all=document.querySelectorAll('body *');
+                    for(var i=0;i<<all.length;i++){
+                      var el=all[i];
+                      var rect=el.getBoundingClientRect();
+                      if(rect.width>50 && rect.height>20 && rect.top<<200){
+                        var id=el.id||'';
+                        var cls=el.className||'';
+                        var text=(el.textContent||'').substring(0,60).replace(/\\s+/g,' ');
+                        var tag=el.tagName.toLowerCase();
+                        var sel=id?('#'+id):(cls?('.'+cls.split(/\\s+/)[0]):tag);
+                        if(id||cls){
+                          results.push({tag:tag,id:id,class:cls,text:text,selector:sel});
+                        }
+                      }
+                    }
+                    return JSON.stringify(results.slice(0,30));
+                  })()
+                  """
+                  wv.evaluateJavaScript(js) { [weak self] result, error in
+                      guard let self = self else { return }
+                      if let err = error {
+                          self.showAlert(title: "Error", message: err.localizedDescription)
+                          return
+                      }
+                      if let json = result as? String,
+                         let data = json.data(using: .utf8),
+                         let arr = try? JSONSerialization.jsonObject(with: data) as? [[String:String]] {
+                          self.showElementPicker(elements: arr)
+                      } else {
+                          self.showAlert(title: "No Elements", message: "No elements found near top of page.")
+                      }
+                  }
+              }
+
+              func showElementPicker(elements: [[String:String]]) {
+                  let alert = UIAlertController(title: "Tap to Copy Selector", message: nil, preferredStyle: .actionSheet)
+                  for el in elements {
+                      let tag = el["tag"] ?? "?"
+                      let id = el["id"] ?? ""
+                      let cls = el["class"] ?? ""
+                      let text = el["text"] ?? ""
+                      let sel = el["selector"] ?? ""
+                      let title = "[\(tag)] \(sel) - \(text)"
+                      let action = UIAlertAction(title: title, style: .default) { _ in
+                          UIPasteboard.general.string = sel
+                          self.showAlert(title: "Copied!", message: "Selector copied:\n\(sel)")
+                      }
+                      alert.addAction(action)
+                  }
+                  alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+                  self.present(alert, animated: true)
+              }
+
+              func showAlert(title: String, message: String) {
+                  let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+                  alert.addAction(UIAlertAction(title: "OK", style: .default))
+                  self.present(alert, animated: true)
               }
 
               func userContentController(_ u: WKUserContentController, didReceive m: WKScriptMessage) {
@@ -169,15 +211,6 @@ jobs:
                                   }
                               }
                           }
-                      }
-                  } else if m.name == "inspector" {
-                      if let json = m.body as? String {
-                          let alert = UIAlertController(title: "Element Inspector", message: json, preferredStyle: .alert)
-                          alert.addAction(UIAlertAction(title: "Copy", style: .default, handler: { _ in
-                              UIPasteboard.general.string = json
-                          }))
-                          alert.addAction(UIAlertAction(title: "OK", style: .cancel))
-                          self.present(alert, animated: true)
                       }
                   }
               }
