@@ -124,22 +124,19 @@ jobs:
                   let js = """
                   (function(){
                     var results=[];
-                    var all=document.querySelectorAll('body *');
-                    for(var i=0;i<<all.length;i++){
+                    var all=document.querySelectorAll('*');
+                    for(var i=0;i<all.length;i++){
                       var el=all[i];
-                      var rect=el.getBoundingClientRect();
-                      if(rect.width>50 && rect.height>20 && rect.top<<300){
-                        var id=el.id||'';
-                        var cls=el.className||'';
-                        var text=(el.textContent||'').substring(0,60).replace(/\\s+/g,' ');
-                        var tag=el.tagName.toLowerCase();
-                        var sel=id?('#'+id):(cls?('.'+cls.split(/\\s+/)[0]):tag);
-                        if(id||cls){
-                          results.push({tag:tag,id:id,class:cls,text:text,selector:sel});
-                        }
+                      var id=el.id||'';
+                      var cls=el.className||'';
+                      var text=(el.textContent||'').substring(0,40).replace(/\\s+/g,' ');
+                      var tag=el.tagName.toLowerCase();
+                      var sel=id?('#'+id):(cls?('.'+cls.split(/\\s+/)[0]):tag);
+                      if(id||cls){
+                        results.push({tag:tag,id:id,class:cls,text:text,selector:sel});
                       }
                     }
-                    return JSON.stringify(results.slice(0,40));
+                    return JSON.stringify(results.slice(0,60));
                   })()
                   """
                   wv.evaluateJavaScript(js) { [weak self] result, error in
@@ -151,9 +148,13 @@ jobs:
                       if let json = result as? String,
                          let data = json.data(using: .utf8),
                          let arr = try? JSONSerialization.jsonObject(with: data) as? [[String:String]] {
-                          self.showInspectorTable(elements: arr)
+                          if arr.isEmpty {
+                              self.showAlert(title: "Empty", message: "No elements with IDs or classes found.")
+                          } else {
+                              self.showInspectorTable(elements: arr)
+                          }
                       } else {
-                          self.showAlert(title: "No Elements", message: "No elements found.")
+                          self.showAlert(title: "Error", message: "Failed to parse elements.")
                       }
                   }
               }
@@ -236,7 +237,7 @@ jobs:
                   cell.textLabel?.text = "[\(tag)] \(sel)"
                   cell.detailTextLabel?.text = text
                   cell.detailTextLabel?.numberOfLines = 2
-                  cell.textLabel?.font = UIFont.systemFont(ofSize: 13)
+                  cell.textLabel?.font = UIFont.systemFont(ofSize: 12)
                   return cell
               }
               
