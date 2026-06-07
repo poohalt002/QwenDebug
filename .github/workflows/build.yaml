@@ -103,8 +103,8 @@ jobs:
                   ])
                   wv.load(URLRequest(url: URL(string: "https://chat.qwen.ai/")!))
                   
-                  // Bigger, red, very visible button
-                  let btn = UIButton(type: .system)
+                  // Create button with explicit z-index
+                  let btn = UIButton(type: .custom)
                   btn.setTitle("INSPECT", for: .normal)
                   btn.backgroundColor = UIColor.red
                   btn.setTitleColor(UIColor.white, for: .normal)
@@ -114,11 +114,12 @@ jobs:
                   btn.layer.shadowOffset = CGSize(width: 0, height: 2)
                   btn.layer.shadowOpacity = 0.5
                   btn.layer.shadowRadius = 4
+                  btn.isUserInteractionEnabled = true
                   btn.translatesAutoresizingMaskIntoConstraints = false
                   btn.addTarget(self, action: #selector(inspectTapped), for: .touchUpInside)
-                  view.addSubview(btn)
                   
-                  // Bring to absolute front
+                  // Add to view AFTER webView, then bring to front
+                  view.addSubview(btn)
                   view.bringSubviewToFront(btn)
                   
                   NSLayoutConstraint.activate([
@@ -127,6 +128,11 @@ jobs:
                       btn.widthAnchor.constraint(equalToConstant: 100),
                       btn.heightAnchor.constraint(equalToConstant: 44)
                   ])
+                  
+                  // Add tap gesture as backup
+                  let tap = UITapGestureRecognizer(target: self, action: #selector(inspectTapped))
+                  tap.numberOfTapsRequired = 1
+                  btn.addGestureRecognizer(tap)
               }
 
               @objc func inspectTapped() {
