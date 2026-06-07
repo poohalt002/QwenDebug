@@ -28,6 +28,24 @@ jobs:
                   view.backgroundColor = UIColor.white
                   sb = false
                   
+                  // Add native navigation bar with Inspect button
+                  let nav = UINavigationController(rootViewController: self)
+                  nav.isNavigationBarHidden = false
+                  nav.navigationBar.barTintColor = UIColor.red
+                  nav.navigationBar.tintColor = UIColor.white
+                  nav.navigationBar.isTranslucent = false
+                  
+                  self.title = "Qwen"
+                  let inspectBtn = UIBarButtonItem(title: "Inspect", style: .plain, target: self, action: #selector(inspectNow))
+                  inspectBtn.tintColor = UIColor.white
+                  self.navigationItem.rightBarButtonItem = inspectBtn
+                  
+                  // Replace root with nav controller
+                  if let window = UIApplication.shared.windows.first {
+                      window.rootViewController = nav
+                      window.makeKeyAndVisible()
+                  }
+                  
                   let c = WKWebViewConfiguration()
                   c.userContentController.add(self, name: "themeHandler")
                   
@@ -102,34 +120,9 @@ jobs:
                       wv.bottomAnchor.constraint(equalTo: view.bottomAnchor)
                   ])
                   wv.load(URLRequest(url: URL(string: "https://chat.qwen.ai/")!))
-                  
-                  // Add shake label
-                  let label = UILabel()
-                  label.text = "SHAKE TO INSPECT"
-                  label.textColor = UIColor.red
-                  label.font = UIFont.boldSystemFont(ofSize: 12)
-                  label.backgroundColor = UIColor.white.withAlphaComponent(0.9)
-                  label.textAlignment = .center
-                  label.layer.cornerRadius = 4
-                  label.layer.masksToBounds = true
-                  label.translatesAutoresizingMaskIntoConstraints = false
-                  view.addSubview(label)
-                  NSLayoutConstraint.activate([
-                      label.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
-                      label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
-                      label.widthAnchor.constraint(equalToConstant: 130),
-                      label.heightAnchor.constraint(equalToConstant: 24)
-                  ])
-                  view.bringSubviewToFront(label)
               }
 
-              override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
-                  if motion == .motionShake {
-                      inspectNow()
-                  }
-              }
-
-              func inspectNow() {
+              @objc func inspectNow() {
                   let js = """
                   (function(){
                     var results=[];
