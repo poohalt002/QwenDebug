@@ -103,39 +103,33 @@ jobs:
                   ])
                   wv.load(URLRequest(url: URL(string: "https://chat.qwen.ai/")!))
                   
-                  // Create button with explicit z-index
-                  let btn = UIButton(type: .custom)
-                  btn.setTitle("INSPECT", for: .normal)
-                  btn.backgroundColor = UIColor.red
-                  btn.setTitleColor(UIColor.white, for: .normal)
-                  btn.titleLabel?.font = UIFont.boldSystemFont(ofSize: 16)
-                  btn.layer.cornerRadius = 8
-                  btn.layer.shadowColor = UIColor.black.cgColor
-                  btn.layer.shadowOffset = CGSize(width: 0, height: 2)
-                  btn.layer.shadowOpacity = 0.5
-                  btn.layer.shadowRadius = 4
-                  btn.isUserInteractionEnabled = true
-                  btn.translatesAutoresizingMaskIntoConstraints = false
-                  btn.addTarget(self, action: #selector(inspectTapped), for: .touchUpInside)
-                  
-                  // Add to view AFTER webView, then bring to front
-                  view.addSubview(btn)
-                  view.bringSubviewToFront(btn)
-                  
+                  // Add shake label
+                  let label = UILabel()
+                  label.text = "SHAKE TO INSPECT"
+                  label.textColor = UIColor.red
+                  label.font = UIFont.boldSystemFont(ofSize: 12)
+                  label.backgroundColor = UIColor.white.withAlphaComponent(0.9)
+                  label.textAlignment = .center
+                  label.layer.cornerRadius = 4
+                  label.layer.masksToBounds = true
+                  label.translatesAutoresizingMaskIntoConstraints = false
+                  view.addSubview(label)
                   NSLayoutConstraint.activate([
-                      btn.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 6),
-                      btn.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
-                      btn.widthAnchor.constraint(equalToConstant: 100),
-                      btn.heightAnchor.constraint(equalToConstant: 44)
+                      label.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
+                      label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
+                      label.widthAnchor.constraint(equalToConstant: 130),
+                      label.heightAnchor.constraint(equalToConstant: 24)
                   ])
-                  
-                  // Add tap gesture as backup
-                  let tap = UITapGestureRecognizer(target: self, action: #selector(inspectTapped))
-                  tap.numberOfTapsRequired = 1
-                  btn.addGestureRecognizer(tap)
+                  view.bringSubviewToFront(label)
               }
 
-              @objc func inspectTapped() {
+              override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
+                  if motion == .motionShake {
+                      inspectNow()
+                  }
+              }
+
+              func inspectNow() {
                   let js = """
                   (function(){
                     var results=[];
@@ -143,7 +137,7 @@ jobs:
                     for(var i=0;i<<all.length;i++){
                       var el=all[i];
                       var rect=el.getBoundingClientRect();
-                      if(rect.width>50 && rect.height>20 && rect.top<<250){
+                      if(rect.width>50 && rect.height>20 && rect.top<<300){
                         var id=el.id||'';
                         var cls=el.className||'';
                         var text=(el.textContent||'').substring(0,60).replace(/\\s+/g,' ');
@@ -154,7 +148,7 @@ jobs:
                         }
                       }
                     }
-                    return JSON.stringify(results.slice(0,30));
+                    return JSON.stringify(results.slice(0,40));
                   })()
                   """
                   wv.evaluateJavaScript(js) { [weak self] result, error in
@@ -168,7 +162,7 @@ jobs:
                          let arr = try? JSONSerialization.jsonObject(with: data) as? [[String:String]] {
                           self.showElementPicker(elements: arr)
                       } else {
-                          self.showAlert(title: "No Elements", message: "No elements found near top of page.")
+                          self.showAlert(title: "No Elements", message: "No elements found.")
                       }
                   }
               }
@@ -184,7 +178,7 @@ jobs:
                       let title = "[\(tag)] \(sel) - \(text)"
                       let action = UIAlertAction(title: title, style: .default) { _ in
                           UIPasteboard.general.string = sel
-                          self.showAlert(title: "Copied!", message: "Selector copied:\n\(sel)")
+                          self.showAlert(title: "Copied!", message: "Selector:\n\(sel)")
                       }
                       alert.addAction(action)
                   }
