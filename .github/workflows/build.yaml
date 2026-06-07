@@ -1,0 +1,224 @@
+name: BuildQwenInspector
+
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - run: |
+          set -ex
+          mkdir -p Payload/QwenInspector.app
+          cat > app.swift <<'SWIFT'
+          import UIKit
+          import WebKit
+
+          class VC: UIViewController, WKScriptMessageHandler {
+              var wv: WKWebView!
+              var lastColor = "255,255,255"
+              var stableCount = 0
+              var sb = false
+
+              override var preferredStatusBarStyle: UIStatusBarStyle {
+                  return sb ? .lightContent : .darkContent
+              }
+
+              override func viewDidLoad() {
+                  super.viewDidLoad()
+                  view.backgroundColor = UIColor.white
+                  sb = false
+                  
+                  let c = WKWebViewConfiguration()
+                  c.userContentController.add(self, name: "themeHandler")
+                  c.userContentController.add(self, name: "inspector")
+                  
+                  let themeJS = """
+                  (function(){
+                    var last='';
+                    var stable=0;
+                    function getTopColor(){
+                      var selectors=['header','nav','[class*=header]','[class*=nav]','[class*=top]','[id*=header]','[id*=nav]','.app-header','.navbar','.top-bar','#header'];
+                      for(var i=0;i<selectors.length;i++){
+                        var el=document.querySelector(selectors[i]);
+                        if(el){
+                          var rect=el.getBoundingClientRect();
+                          if(rect.top<=5 && rect.height>20){
+                            var c=getComputedStyle(el).backgroundColor;
+                            var m=c.match(/(\\d+)[,\\s]+(\\d+)[,\\s]+(\\d+)/);
+                            if(m && c!=='rgba(0, 0, 0, 0)' && c!=='transparent') return m[1]+','+m[2]+','+m[3];
+                          }
+                        }
+                      }
+                      var candidates=document.querySelectorAll('body > *');
+                      for(var i=0;i<candidates.length;i++){
+                        var r=candidates[i].getBoundingClientRect();
+                        if(r.top<=5 && r.height>30){
+                          var c=getComputedStyle(candidates[i]).backgroundColor;
+                          var m=c.match(/(\\d+)[,\\s]+(\\d+)[,\\s]+(\\d+)/);
+                          if(m && c!=='rgba(0, 0, 0, 0)' && c!=='transparent') return m[1]+','+m[2]+','+m[3];
+                        }
+                      }
+                      var el=document.body;
+                      while(el && el!==document.documentElement){
+                        var c=getComputedStyle(el).backgroundColor;
+                        var m=c.match(/(\\d+)[,\\s]+(\\d+)[,\\s]+(\\d+)/);
+                        if(m && c!=='rgba(0, 0, 0, 0)' && c!=='transparent') return m[1]+','+m[2]+','+m[3];
+                        el=el.parentElement;
+                      }
+                      var c=getComputedStyle(document.documentElement).backgroundColor;
+                      var m=c.match(/(\\d+)[,\\s]+(\\d+)[,\\s]+(\\d+)/);
+                      if(m) return m[1]+','+m[2]+','+m[3];
+                      return '255,255,255';
+                    }
+                    function send(){
+                      var color=getTopColor();
+                      if(color===last){stable++;}else{stable=0;last=color;}
+                      if(stable>=1){
+                        if(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.themeHandler){
+                          window.webkit.messageHandlers.themeHandler.postMessage(color);
+                        }
+                      }
+                    }
+                    if(document.readyState==='loading'){
+                      document.addEventListener('DOMContentLoaded',send);
+                    }else{
+                      send();
+                    }
+                    setInterval(send,400);
+                    var observer=new MutationObserver(function(){stable=0;send();});
+                    observer.observe(document.documentElement,{attributes:true,childList:true,subtree:true});
+                  })()
+                  """
+                  
+                  let inspectJS = """
+                  (function(){
+                    function getSelector(el){
+                      if(el.id) return '#'+el.id;
+                      var path=[];
+                      while(el && el.nodeType===1 && el!==document.body && el!==document.documentElement){
+                        var tag=el.tagName.toLowerCase();
+                        if(el.className){
+                          var cls=el.className.toString().split(/\\s+/).filter(function(c){return c.length>0;}).join('.');
+                          if(cls) tag+='.'+cls;
+                        }
+                        path.unshift(tag);
+                        el=el.parentElement;
+                      }
+                      return path.join(' > ');
+                    }
+                    document.addEventListener('contextmenu',function(e){
+                      e.preventDefault();
+                      var el=e.target;
+                      var info={
+                        tag: el.tagName,
+                        id: el.id || '(none)',
+                        class: el.className || '(none)',
+                        text: (el.textContent || '').substring(0,80),
+                        selector: getSelector(el)
+                      };
+                      if(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.inspector){
+                        window.webkit.messageHandlers.inspector.postMessage(JSON.stringify(info));
+                      }
+                    });
+                    var style=document.createElement('style');
+                    style.textContent='*{touch-action:manipulation;-webkit-touch-callout:none;}';
+                    document.head.appendChild(style);
+                  })()
+                  """
+                  
+                  c.userContentController.addUserScript(WKUserScript(source: themeJS, injectionTime: .atDocumentStart, forMainFrameOnly: false))
+                  c.userContentController.addUserScript(WKUserScript(source: inspectJS, injectionTime: .atDocumentEnd, forMainFrameOnly: false))
+                  
+                  wv = WKWebView(frame: .zero, configuration: c)
+                  wv.translatesAutoresizingMaskIntoConstraints = false
+                  wv.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
+                  view.addSubview(wv)
+                  NSLayoutConstraint.activate([
+                      wv.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+                      wv.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                      wv.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                      wv.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+                  ])
+                  wv.load(URLRequest(url: URL(string: "https://chat.qwen.ai/")!))
+              }
+
+              func userContentController(_ u: WKUserContentController, didReceive m: WKScriptMessage) {
+                  if m.name == "themeHandler" {
+                      if let r = m.body as? String {
+                          if r == lastColor {
+                              stableCount += 1
+                          } else {
+                              stableCount = 0
+                              lastColor = r
+                          }
+                          if stableCount >= 1 {
+                              let p = r.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: CharacterSet.whitespaces)) }
+                              if p.count == 3 {
+                                  let R = CGFloat(p[0]) / 255.0
+                                  let G = CGFloat(p[1]) / 255.0
+                                  let B = CGFloat(p[2]) / 255.0
+                                  view.backgroundColor = UIColor(red: R, green: G, blue: B, alpha: 1.0)
+                                  let l = (0.299 * CGFloat(p[0]) + 0.587 * CGFloat(p[1]) + 0.114 * CGFloat(p[2])) / 255.0
+                                  let newDark: Bool
+                                  if l < 0.45 { newDark = true }
+                                  else if l > 0.55 { newDark = false }
+                                  else { newDark = sb }
+                                  if newDark != sb {
+                                      sb = newDark
+                                      setNeedsStatusBarAppearanceUpdate()
+                                  }
+                              }
+                          }
+                      }
+                  } else if m.name == "inspector" {
+                      if let json = m.body as? String {
+                          let alert = UIAlertController(title: "Element Inspector", message: json, preferredStyle: .alert)
+                          alert.addAction(UIAlertAction(title: "Copy", style: .default, handler: { _ in
+                              UIPasteboard.general.string = json
+                          }))
+                          alert.addAction(UIAlertAction(title: "OK", style: .cancel))
+                          self.present(alert, animated: true)
+                      }
+                  }
+              }
+          }
+
+          class AD: UIResponder, UIApplicationDelegate {
+              var w: UIWindow?
+              func application(_ a: UIApplication, didFinishLaunchingWithOptions l: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+                  w = UIWindow(frame: UIScreen.main.bounds)
+                  w?.rootViewController = VC()
+                  w?.makeKeyAndVisible()
+                  return true
+              }
+          }
+
+          UIApplicationMain(CommandLine.argc, CommandLine.unsafeArgv, nil, NSStringFromClass(AD.self))
+          SWIFT
+          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          xcrun -sdk iphoneos swiftc -target arm64-apple-ios15.0 -framework UIKit -framework WebKit -o Payload/QwenInspector.app/QwenInspector app.swift
+          chmod +x Payload/QwenInspector.app/QwenInspector
+          cat > Payload/QwenInspector.app/Info.plist <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>CFBundleExecutable</key><string>QwenInspector</string>
+          <key>CFBundleIdentifier</key><string>com.qwen.inspector</string>
+          <key>CFBundleName</key><string>Qwen Inspector</string>
+          <key>CFBundlePackageType</key><string>APPL</string>
+          <key>CFBundleShortVersionString</key><string>1.0</string>
+          <key>CFBundleVersion</key><string>1</string>
+          <key>LSRequiresIPhoneOS</key><true/>
+          <key>MinimumOSVersion</key><string>15.0</string>
+          <key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>
+          <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
+          <key>UIViewControllerBasedStatusBarAppearance</key><true/>
+          <key>CFBundleIcons</key><dict><key>CFBundlePrimaryIcon</key><dict><key>CFBundleIconFiles</key><array><string>AppIcon60x60</string></array><key>CFBundleIconName</key><string>AppIcon</string></dict></dict>
+          </dict></plist>
+          PLIST
+          printf 'APPL????' > Payload/QwenInspector.app/PkgInfo
+          zip -r QwenInspector.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QwenInspector-IPA
+          path: QwenInspector.ipa
