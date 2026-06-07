@@ -103,21 +103,29 @@ jobs:
                   ])
                   wv.load(URLRequest(url: URL(string: "https://chat.qwen.ai/")!))
                   
-                  // Floating Inspect Button
+                  // Bigger, red, very visible button
                   let btn = UIButton(type: .system)
-                  btn.setTitle("🔍 Inspect", for: .normal)
-                  btn.backgroundColor = UIColor(red: 0, green: 0.5, blue: 1, alpha: 0.85)
-                  btn.setTitleColor(.white, for: .normal)
-                  btn.titleLabel?.font = UIFont.boldSystemFont(ofSize: 14)
-                  btn.layer.cornerRadius = 18
+                  btn.setTitle("INSPECT", for: .normal)
+                  btn.backgroundColor = UIColor.red
+                  btn.setTitleColor(UIColor.white, for: .normal)
+                  btn.titleLabel?.font = UIFont.boldSystemFont(ofSize: 16)
+                  btn.layer.cornerRadius = 8
+                  btn.layer.shadowColor = UIColor.black.cgColor
+                  btn.layer.shadowOffset = CGSize(width: 0, height: 2)
+                  btn.layer.shadowOpacity = 0.5
+                  btn.layer.shadowRadius = 4
                   btn.translatesAutoresizingMaskIntoConstraints = false
                   btn.addTarget(self, action: #selector(inspectTapped), for: .touchUpInside)
                   view.addSubview(btn)
+                  
+                  // Bring to absolute front
+                  view.bringSubviewToFront(btn)
+                  
                   NSLayoutConstraint.activate([
-                      btn.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-                      btn.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
-                      btn.widthAnchor.constraint(equalToConstant: 90),
-                      btn.heightAnchor.constraint(equalToConstant: 36)
+                      btn.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 6),
+                      btn.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
+                      btn.widthAnchor.constraint(equalToConstant: 100),
+                      btn.heightAnchor.constraint(equalToConstant: 44)
                   ])
               }
 
@@ -129,7 +137,7 @@ jobs:
                     for(var i=0;i<<all.length;i++){
                       var el=all[i];
                       var rect=el.getBoundingClientRect();
-                      if(rect.width>50 && rect.height>20 && rect.top<<200){
+                      if(rect.width>50 && rect.height>20 && rect.top<<250){
                         var id=el.id||'';
                         var cls=el.className||'';
                         var text=(el.textContent||'').substring(0,60).replace(/\\s+/g,' ');
